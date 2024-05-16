@@ -1,0 +1,3 @@
+﻿  tetris.c
+C:\Users\User\source\repos\TetrisProject\TetrisProject\tetris.c(273,11): warning C4244: '函式': 將 'time_t' 轉換為 'unsigned int'，由於類型不同，可能導致資料遺失
+  TetrisProject.vcxproj -> C:\Users\User\source\repos\TetrisProject\x64\Debug\TetrisProject.exe
