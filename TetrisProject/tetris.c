@@ -7,6 +7,24 @@
 #define CANVAS_WIDTH 10
 #define CANVAS_HEIGHT 20
 
+//掉落時間
+#define FALL_DELAY 500
+#define RENDER_DELAY 100
+
+//鍵盤對照表
+#define LEFT_KEY 0x25
+#define RIGHT_KEY 0x27 
+#define ROTATE_KEY 0x26 
+#define DOWN_KEY 0x28 
+#define FALL_KEY 0x20 
+
+// 判斷是否有按下按鈕的函式
+#define LEFT_FUNC() GetAsyncKeyState(LEFT_KEY) & 0x8000
+#define RIGHT_FUNC() GetAsyncKeyState(RIGHT_KEY) & 0x8000
+#define ROTATE_FUNC() GetAsyncKeyState(ROTATE_KEY) & 0x8000
+#define DOWN_FUNC() GetAsyncKeyState(DOWN_KEY) & 0x8000
+#define FALL_FUNC() GetAsyncKeyState(FALL_KEY) & 0x8000
+
 typedef enum
 {
     RED = 41,
@@ -205,6 +223,29 @@ void printCanvas(Block canvas[CANVAS_HEIGHT][CANVAS_WIDTH], State* state)
         }
         printf("\033[0m|\n");
     }
+
+    // 輸出Next:
+    printf("\033[%d;%dHNext:", 3, CANVAS_WIDTH * 2 + 5);
+    // 輸出有甚麼方塊
+    for (int i = 1; i <= 3; i++)
+    {
+        Shape shapeData = shapes[state->queue[i]];
+        for (int j = 0; j < 4; j++)
+        {
+            printf("\033[%d;%dH", i * 4 + j, CANVAS_WIDTH * 2 + 15);
+            for (int k = 0; k < 4; k++)
+            {
+                if (j < shapeData.size && k < shapeData.size && shapeData.rotates[0][j][k])
+                {
+                    printf("\x1b[%dm  ", shapeData.color);
+                }
+                else
+                {
+                    printf("\x1b[0m  ");
+                }
+            }
+        }
+    }
     return;
 }
 
@@ -260,11 +301,87 @@ bool move(Block canvas[CANVAS_HEIGHT][CANVAS_WIDTH], int originalX, int original
 
     return true;
 }
+int clearLine(Block canvas[CANVAS_HEIGHT][CANVAS_WIDTH])
+{
+    for (int i = 0; i < CANVAS_HEIGHT; i++)
+    {
+        for (int j = 0; j < CANVAS_WIDTH; j++)
+        {
+            if (canvas[i][j].current)
+            {
+                canvas[i][j].current = false;
+            }
+        }
+    }
 
+    int linesCleared = 0;
+    /*....日後會再更新*/
+    return linesCleared;
+}
 void logic(Block canvas[CANVAS_HEIGHT][CANVAS_WIDTH], State* state)
 {
-    if (move(canvas, state->x, state->y, state->rotate, state->x, state->y + 1, state->rotate, O))
-        state->y++;
+    if (ROTATE_FUNC())
+    {
+        int newRotate = (state->rotate + 1) % 4;
+        if (move(canvas, state->x, state->y, state->rotate, state->x, state->y, newRotate, state->queue[0]))
+        {
+            state->rotate = newRotate;
+        }
+    }
+    else if (LEFT_FUNC())
+    {
+        if (move(canvas, state->x, state->y, state->rotate, state->x - 1, state->y, state->rotate, state->queue[0]))
+        {
+            state->x -= 1;
+        }
+    }
+    else if (RIGHT_FUNC())
+    {
+        if (move(canvas, state->x, state->y, state->rotate, state->x + 1, state->y, state->rotate, state->queue[0]))
+        {
+            state->x += 1;
+        }
+    }
+    else if (DOWN_FUNC())
+    {
+        state->fallTime = FALL_DELAY;
+    }
+    else if (FALL_FUNC())
+    {
+        state->fallTime += FALL_DELAY * CANVAS_HEIGHT;
+    }
+
+    state->fallTime += RENDER_DELAY;
+    //100
+    //200
+    //300
+    //400
+    //500
+    while (state->fallTime >= FALL_DELAY)
+    {
+        state->fallTime -= FALL_DELAY;
+        if (move(canvas, state->x, state->y, state->rotate, state->x, state->y + 1, state->rotate, state->queue[0]))
+        {
+            state->y++;
+        }
+        else
+        {
+            state->score += clearLine(canvas);
+
+            state->x = CANVAS_WIDTH / 2;
+            state->y = 0;
+            state->rotate = 0;
+            state->queue[0] = state->queue[1];
+            state->queue[1] = state->queue[2];
+            state->queue[2] = state->queue[3];
+            state->queue[3] = rand() % 7;
+            if (!move(canvas, state->x, state->y, state->rotate, state->x, state->y, state->rotate, state->queue[0]))
+            {
+                printf("\033[%d;%dH\x1b[41m GAME OVER \x1b[0m\033[%d;%dH", CANVAS_HEIGHT - 3, CANVAS_WIDTH * 2 + 5, CANVAS_HEIGHT + 5, 0);
+                exit(0);//結束遊戲
+            }
+        }
+    }
     return;
 }
 
@@ -278,6 +395,11 @@ int main()
         .rotate = 0,
         .fallTime = 0 };
 
+    for (int i = 0; i < 4; i++)
+    {
+        state.queue[i] = rand() % 7;
+    }
+
     Block canvas[CANVAS_HEIGHT][CANVAS_WIDTH];
     for (int i = 0; i < CANVAS_HEIGHT; i++)
     {
@@ -287,7 +409,7 @@ int main()
         }
     }
 
-    Shape shapeData = shapes[3];
+    Shape shapeData = shapes[state.queue[0]];
 
     for (int i = 0; i < shapeData.size; i++)
     {
@@ -295,7 +417,7 @@ int main()
         {
             if (shapeData.rotates[0][i][j])
             {
-                setBlock(&canvas[state.y + i][state.x + j], shapeData.color, O, true);
+                setBlock(&canvas[state.y + i][state.x + j], shapeData.color, state.queue[0], true);
             }
         }
     }
